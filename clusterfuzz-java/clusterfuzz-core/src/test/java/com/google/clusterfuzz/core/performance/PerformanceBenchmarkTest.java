@@ -194,6 +194,101 @@ class PerformanceBenchmarkTest {
                             "Memory usage per entity should be reasonable");
     }
 
+    @Test
+    @DisplayName("Benchmark: Concurrent Operations")
+    void benchmarkConcurrentOperations() {
+        System.out.println("\n=== Concurrent Operations Performance Benchmark ===");
+
+        // Test concurrent reads
+        List<Testcase> testcases = createTestcases(MEDIUM_DATASET);
+        testcaseRepository.saveAll(testcases);
+        entityManager.flush();
+
+        long startTime = System.nanoTime();
+        
+        // Simulate concurrent read operations
+        for (int i = 0; i < 10; i++) {
+            List<Testcase> results = testcaseRepository.findByOpen(true);
+            assertFalse(results.isEmpty());
+        }
+        
+        long concurrentReadTime = System.nanoTime() - startTime;
+        
+        System.out.printf("10 concurrent read operations completed in %d ms%n", 
+                         TimeUnit.NANOSECONDS.toMillis(concurrentReadTime));
+
+        // Performance assertion
+        Assertions.assertTrue(TimeUnit.NANOSECONDS.toMillis(concurrentReadTime) < 2000, 
+                            "Concurrent reads should complete within 2 seconds");
+    }
+
+    @Test
+    @DisplayName("Benchmark: Repository Method Performance")
+    void benchmarkRepositoryMethods() {
+        System.out.println("\n=== Repository Method Performance Benchmark ===");
+
+        // Setup test data
+        List<Testcase> testcases = createTestcases(MEDIUM_DATASET);
+        testcaseRepository.saveAll(testcases);
+        entityManager.flush();
+
+        // Benchmark different repository methods
+        long startTime = System.nanoTime();
+        long count = testcaseRepository.count();
+        long countTime = System.nanoTime() - startTime;
+        
+        startTime = System.nanoTime();
+        List<Testcase> openTestcases = testcaseRepository.findByOpen(true);
+        long findByOpenTime = System.nanoTime() - startTime;
+        
+        startTime = System.nanoTime();
+        List<Object[]> stats = testcaseRepository.getCrashTypeStatistics();
+        long statsTime = System.nanoTime() - startTime;
+
+        System.out.printf("Repository method performance:%n");
+        System.out.printf("  count(): %d ms (result: %d)%n", 
+                         TimeUnit.NANOSECONDS.toMillis(countTime), count);
+        System.out.printf("  findByOpen(): %d ms (result: %d)%n", 
+                         TimeUnit.NANOSECONDS.toMillis(findByOpenTime), openTestcases.size());
+        System.out.printf("  getCrashTypeStatistics(): %d ms (result: %d)%n", 
+                         TimeUnit.NANOSECONDS.toMillis(statsTime), stats.size());
+
+        // Performance assertions
+        Assertions.assertTrue(TimeUnit.NANOSECONDS.toMillis(countTime) < 100, 
+                            "Count operation should be under 100ms");
+        Assertions.assertTrue(TimeUnit.NANOSECONDS.toMillis(findByOpenTime) < 500, 
+                            "FindByOpen should be under 500ms");
+        Assertions.assertTrue(TimeUnit.NANOSECONDS.toMillis(statsTime) < 1000, 
+                            "Statistics query should be under 1 second");
+    }
+
+    @Test
+    @DisplayName("Benchmark: Cross-Entity Query Performance")
+    void benchmarkCrossEntityQueries() {
+        System.out.println("\n=== Cross-Entity Query Performance Benchmark ===");
+
+        // Setup related entities
+        List<Testcase> testcases = createTestcases(SMALL_DATASET);
+        testcaseRepository.saveAll(testcases);
+        
+        List<Job> jobs = createJobs(SMALL_DATASET / 10);
+        jobRepository.saveAll(jobs);
+        
+        entityManager.flush();
+
+        // Benchmark cross-entity queries
+        long startTime = System.nanoTime();
+        List<Testcase> jobTestcases = testcaseRepository.findByJobType("test-job-1");
+        long crossEntityTime = System.nanoTime() - startTime;
+
+        System.out.printf("Cross-entity query completed in %d ms (found %d testcases)%n", 
+                         TimeUnit.NANOSECONDS.toMillis(crossEntityTime), jobTestcases.size());
+
+        // Performance assertion
+        Assertions.assertTrue(TimeUnit.NANOSECONDS.toMillis(crossEntityTime) < 500, 
+                            "Cross-entity queries should be under 500ms");
+    }
+
     // Helper methods for creating test data
     private List<Testcase> createTestcases(int count) {
         List<Testcase> testcases = new ArrayList<>();
