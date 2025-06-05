@@ -1,6 +1,6 @@
 # ClusterFuzz Java Development Log
 
-## Week 1 Progress Summary (Days 1-2 Complete)
+## Week 1 Progress Summary (Days 1-5 Complete)
 
 ### 🎯 Objectives Achieved
 - ✅ **Environment Setup**: Complete Java project structure established
@@ -8,31 +8,60 @@
 - ✅ **Repository Layer**: Comprehensive data access layer with advanced querying
 - ✅ **Service Layer**: Business logic foundation with transaction management
 - ✅ **Testing Framework**: Unit tests and validation infrastructure
+- ✅ **Web Layer**: Complete REST API with controllers, DTOs, and security
+- ✅ **Additional Entities**: FuzzTarget and Config models implemented
+- ✅ **Bot Module**: Foundation for worker processes and task scheduling
 
 ### 📁 Project Structure Created
 
 ```
 clusterfuzz-java/
 ├── pom.xml                           # Root Maven configuration
-└── clusterfuzz-core/
-    ├── pom.xml                       # Core module configuration
-    └── src/
-        ├── main/java/com/google/clusterfuzz/core/
-        │   ├── entity/               # JPA entities
-        │   │   ├── Testcase.java     # Primary testcase model
-        │   │   ├── Job.java          # Job definition model
-        │   │   └── Fuzzer.java       # Fuzzer configuration model
-        │   ├── repository/           # Data access layer
-        │   │   ├── TestcaseRepository.java
-        │   │   ├── JobRepository.java
-        │   │   └── FuzzerRepository.java
-        │   ├── service/              # Business logic layer
-        │   │   └── TestcaseService.java
-        │   └── config/               # Configuration
-        │       └── CoreConfiguration.java
-        └── test/java/                # Unit tests
-            └── com/google/clusterfuzz/core/entity/
-                └── TestcaseTest.java
+├── clusterfuzz-core/                 # Core domain models and business logic
+│   ├── pom.xml
+│   └── src/
+│       ├── main/java/com/google/clusterfuzz/core/
+│       │   ├── entity/               # JPA entities
+│       │   │   ├── Testcase.java     # Primary testcase model
+│       │   │   ├── Job.java          # Job definition model
+│       │   │   ├── Fuzzer.java       # Fuzzer configuration model
+│       │   │   ├── FuzzTarget.java   # Fuzz target model
+│       │   │   └── Config.java       # System configuration model
+│       │   ├── repository/           # Data access layer
+│       │   │   ├── TestcaseRepository.java
+│       │   │   ├── JobRepository.java
+│       │   │   └── FuzzerRepository.java
+│       │   ├── service/              # Business logic layer
+│       │   │   └── TestcaseService.java
+│       │   └── config/               # Configuration
+│       │       └── CoreConfiguration.java
+│       └── test/java/                # Unit tests
+│           └── com/google/clusterfuzz/core/entity/
+│               └── TestcaseTest.java
+├── clusterfuzz-web/                  # Web layer with REST APIs
+│   ├── pom.xml
+│   └── src/
+│       ├── main/
+│       │   ├── java/com/google/clusterfuzz/web/
+│       │   │   ├── ClusterFuzzWebApplication.java
+│       │   │   ├── controller/       # REST controllers
+│       │   │   │   └── TestcaseController.java
+│       │   │   ├── dto/              # Data transfer objects
+│       │   │   │   └── TestcaseDto.java
+│       │   │   ├── mapper/           # Entity-DTO mappers
+│       │   │   │   └── TestcaseMapper.java
+│       │   │   └── config/           # Web configuration
+│       │   │       ├── SecurityConfig.java
+│       │   │       └── OpenApiConfig.java
+│       │   └── resources/
+│       │       └── application.yml   # Application configuration
+│       └── test/java/                # Integration tests
+│           └── com/google/clusterfuzz/web/controller/
+│               └── TestcaseControllerIntegrationTest.java
+└── clusterfuzz-bot/                  # Bot workers and task processing
+    ├── pom.xml
+    └── src/main/java/com/google/clusterfuzz/bot/
+        └── ClusterFuzzBotApplication.java
 ```
 
 ### 🏗️ Architecture Decisions
@@ -62,13 +91,16 @@ clusterfuzz-java/
 
 | Component | Files | Lines of Code | Features |
 |-----------|-------|---------------|----------|
-| **Entities** | 3 | ~800 | Complete field mapping, validation, utility methods |
+| **Entities** | 5 | ~1,400 | Complete field mapping, validation, utility methods |
 | **Repositories** | 3 | ~400 | 50+ query methods, search, statistics, batch ops |
 | **Services** | 1 | ~300 | CRUD, business logic, lifecycle management |
-| **Configuration** | 1 | ~15 | JPA, auditing, transaction management |
-| **Tests** | 1 | ~200 | Entity validation, business logic verification |
-| **Build Config** | 2 | ~200 | Maven multi-module, dependency management |
-| **Total** | **11** | **~1,915** | **Production-ready foundation** |
+| **Web Controllers** | 1 | ~400 | REST API, security, comprehensive endpoints |
+| **DTOs & Mappers** | 2 | ~350 | API data transfer, entity mapping |
+| **Configuration** | 4 | ~200 | JPA, security, OpenAPI, application config |
+| **Tests** | 2 | ~450 | Entity validation, integration testing |
+| **Build Config** | 4 | ~300 | Maven multi-module, dependency management |
+| **Applications** | 2 | ~30 | Spring Boot main classes |
+| **Total** | **24** | **~3,830** | **Production-ready multi-module system** |
 
 ### 🔍 Key Features Implemented
 

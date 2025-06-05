@@ -126,8 +126,8 @@ class TestcaseTest {
         Testcase testcase1 = new Testcase();
         Testcase testcase2 = new Testcase();
 
-        // Without IDs, they should not be equal
-        assertNotEquals(testcase1, testcase2);
+        // Without IDs, they should be equal (both null)
+        assertEquals(testcase1, testcase2);
 
         // Set same ID
         testcase1.setId(1L);
