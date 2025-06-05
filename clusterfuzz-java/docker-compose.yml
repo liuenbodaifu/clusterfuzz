@@ -1,0 +1,229 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: clusterfuzz-postgres
+    environment:
+      POSTGRES_DB: clusterfuzz
+      POSTGRES_USER: clusterfuzz
+      POSTGRES_PASSWORD: clusterfuzz_dev_password
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - clusterfuzz-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U clusterfuzz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis for caching and task queues
+  redis:
+    image: redis:7-alpine
+    container_name: clusterfuzz-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+      - ./docker/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    command: redis-server /usr/local/etc/redis/redis.conf
+    networks:
+      - clusterfuzz-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ClusterFuzz Web API
+  clusterfuzz-web:
+    build:
+      context: .
+      dockerfile: clusterfuzz-web/Dockerfile
+    container_name: clusterfuzz-web
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/clusterfuzz
+      SPRING_DATASOURCE_USERNAME: clusterfuzz
+      SPRING_DATASOURCE_PASSWORD: clusterfuzz_dev_password
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+      JAVA_OPTS: >-
+        -Xmx1g
+        -XX:+UseG1GC
+        -XX:+UseStringDeduplication
+        -Dspring.profiles.active=docker
+        -Dlogging.level.com.google.clusterfuzz=DEBUG
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - clusterfuzz-network
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # ClusterFuzz Bot Worker
+  clusterfuzz-bot:
+    build:
+      context: .
+      dockerfile: clusterfuzz-bot/Dockerfile
+    container_name: clusterfuzz-bot
+    ports:
+      - "8081:8081"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/clusterfuzz
+      SPRING_DATASOURCE_USERNAME: clusterfuzz
+      SPRING_DATASOURCE_PASSWORD: clusterfuzz_dev_password
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+      CLUSTERFUZZ_WEB_URL: http://clusterfuzz-web:8080
+      JAVA_OPTS: >-
+        -Xmx2g
+        -XX:+UseG1GC
+        -XX:+UseStringDeduplication
+        -Dspring.profiles.active=docker
+        -Dlogging.level.com.google.clusterfuzz=DEBUG
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      clusterfuzz-web:
+        condition: service_healthy
+    networks:
+      - clusterfuzz-network
+    volumes:
+      - ./logs:/app/logs
+      - ./work:/app/work
+      - ./corpus:/app/corpus
+      - ./crashes:/app/crashes
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Prometheus for monitoring
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: clusterfuzz-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    networks:
+      - clusterfuzz-network
+
+  # Grafana for visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: clusterfuzz-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./docker/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./docker/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    networks:
+      - clusterfuzz-network
+    depends_on:
+      - prometheus
+
+  # Jaeger for distributed tracing
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: clusterfuzz-jaeger
+    ports:
+      - "16686:16686"
+      - "14268:14268"
+    environment:
+      COLLECTOR_OTLP_ENABLED: true
+    networks:
+      - clusterfuzz-network
+
+  # MinIO for S3-compatible object storage (development)
+  minio:
+    image: minio/minio:latest
+    container_name: clusterfuzz-minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    networks:
+      - clusterfuzz-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  # Nginx reverse proxy
+  nginx:
+    image: nginx:alpine
+    container_name: clusterfuzz-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - clusterfuzz-web
+      - grafana
+    networks:
+      - clusterfuzz-network
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+  minio_data:
+    driver: local
+
+networks:
+  clusterfuzz-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
